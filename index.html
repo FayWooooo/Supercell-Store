@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>荒野亂鬥 - Supercell Store</title>
+    <link id="favicon" rel="icon" href="https://store.supercell.com/favicon.ico">
+    <meta name="description" content="《荒野亂鬥》現已加入Supercell Store">
+    <style>
+        :root {
+            --cf-blue: #0051c3;
+            --chrome-bg: #f7f7f7;
+            --btn-blue: #1a73e8; /* Chrome 報錯按鈕標準色 */
+        }
+
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: "Segoe UI", Tahoma, sans-serif, "Microsoft JhengHei";
+            background-color: #fff;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* --- 驗證碼彈窗 --- */
+        #captcha-container {
+            width: 380px;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+            background: white;
+            user-select: none;
+        }
+
+        .captcha-header {
+            background-color: #4285f4;
+            color: white;
+            padding: 20px;
+        }
+
+        .captcha-header span { font-size: 14px; }
+        .captcha-header h2 { margin: 5px 0; font-size: 24px; font-weight: bold; }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+            padding: 4px;
+            background: #fff;
+        }
+
+        .grid-item {
+            width: 100%;
+            aspect-ratio: 1;
+            background-color: #f0f0f0;
+            background-size: cover;
+            background-position: center;
+            cursor: pointer;
+            position: relative;
+            transition: transform 0.1s;
+        }
+
+        .grid-item.selected { transform: scale(0.92); }
+        .grid-item.selected::after {
+            content: "✓";
+            position: absolute;
+            top: 5px; left: 5px;
+            background: #4285f4;
+            color: white;
+            width: 22px; height: 22px;
+            border-radius: 50%;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 14px;
+            border: 2px solid white;
+            z-index: 10;
+        }
+
+        .captcha-footer {
+            padding: 12px;
+            display: flex;
+            justify-content: flex-end;
+            border-top: 1px solid #eee;
+        }
+
+        .verify-btn {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 2px;
+        }
+
+        .shake { animation: shake 0.4s; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+
+        /* --- Chrome 錯誤頁面 --- */
+        #error-page {
+            display: none;
+            flex-direction: column;
+            align-items: flex-start;
+            max-width: 600px;
+            width: 100%;
+            padding: 15% 60px;
+            background-color: #ffffff; /* 修改為 Chrome 預設底色 */
+            height: 100vh;
+            justify-content: flex-start;
+            box-sizing: border-box;
+        }
+
+        .error-icon { width: 72px; height: 72px; margin-bottom: 40px; }
+        .error-title { font-size: 24px; color: #333; margin-bottom: 25px; font-weight: 500; }
+        .error-desc { font-size: 15px; color: #5f6368; line-height: 1.6; margin-bottom: 8px; }
+        .error-code { font-size: 13px; color: #777; margin-top: 30px; }
+        
+        .btn-reload {
+            background-color: #1a73e8;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 4px;
+            border: none; 
+            cursor: pointer;
+            font-size: 14px; 
+            font-weight: 500;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="captcha-container">
+        <div class="captcha-header">
+            <span>請選取所有包含</span>
+            <h2>機車</h2>
+            <span>的圖片</span>
+        </div>
+        <div class="image-grid" id="grid"></div>
+        <div class="captcha-footer">
+            <button class="verify-btn" onclick="checkCaptcha()">驗證</button>
+        </div>
+    </div>
+
+    <div id="error-page">
+        <svg class="error-icon" viewBox="0 0 72 72">
+            <path d="M15 12C15 10.3431 16.3431 9 18 9H45L57 21V60C57 61.6569 55.6569 63 54 63H18C16.3431 63 15 61.6569 15 60V12Z" fill="#F3F3F3" stroke="#666" stroke-width="3"/>
+            <path d="M45 9V21H57" stroke="#666" stroke-width="3"/>
+            <circle cx="30" cy="35" r="2" fill="#666"/>
+            <circle cx="42" cy="35" r="2" fill="#666"/>
+            <path d="M30 48C30 48 32 44 36 44C40 44 42 48 42 48" stroke="#666" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div class="error-title">這個網頁無法正常運作</div>
+        <div class="error-desc"><strong>store.supercell.com</strong> 目前無法處理這項要求。</div>
+        <div class="error-code">HTTP ERROR 500</div>
+        <button class="btn-reload" onclick="location.reload()">重新載入</button>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'final_verified_status_v4';
+        
+        // 4張機車 (Target), 5張紅綠燈 (Distractors)
+        const motorcycleImgs = [
+            'https://images.unsplash.com/photo-1599819811279-d5ad9cccf838?w=300',
+            'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=300'
+        ];
+        
+        const trafficLightImgs = [
+            'https://loremflickr.com/300/300/trafficlight?lock=1',
+            'https://loremflickr.com/300/300/trafficlight?lock=2',
+            'https://loremflickr.com/300/300/trafficlight?lock=3',
+            'https://loremflickr.com/300/300/trafficlight?lock=4',
+            'https://images.unsplash.com/photo-1558981403-c5f91cbba527?w=300',
+            'https://images.unsplash.com/photo-1444491741275-3747c53c99b4?w=300',
+            'https://loremflickr.com/300/300/trafficlight?lock=5'
+        ];
+
+        let dataset = [];
+
+        function init() {
+            if (localStorage.getItem(STORAGE_KEY)) {
+                showErrorPage();
+            } else {
+                generateCaptcha();
+            }
+        }
+
+        function generateCaptcha() {
+            dataset = [
+                ...motorcycleImgs.map(url => ({ url, isMotor: true })),
+                ...trafficLightImgs.map(url => ({ url, isMotor: false }))
+            ];
+            dataset.sort(() => Math.random() - 0.5);
+
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            dataset.forEach((imgData, index) => {
+                const div = document.createElement('div');
+                div.className = 'grid-item';
+                div.dataset.index = index;
+                const img = new Image();
+                img.src = imgData.url;
+                img.onload = () => div.style.backgroundImage = `url('${imgData.url}')`;
+                img.onerror = () => div.style.backgroundImage = `url('https://loremflickr.com/300/300/city?lock=${index}')`;
+                div.onclick = () => div.classList.toggle('selected');
+                grid.appendChild(div);
+            });
+        }
+
+        function checkCaptcha() {
+            const selected = document.querySelectorAll('.grid-item.selected');
+            const selectedIndices = Array.from(selected).map(item => parseInt(item.dataset.index));
+            const correctIndices = dataset.map((img, idx) => img.isMotor ? idx : null).filter(idx => idx !== null);
+
+            const isCorrect = selectedIndices.length === correctIndices.length && 
+                              correctIndices.every(idx => selectedIndices.includes(idx));
+
+            if (isCorrect) {
+                localStorage.setItem(STORAGE_KEY, 'true');
+                showErrorPage();
+            } else {
+                const container = document.getElementById('captcha-container');
+                container.classList.add('shake');
+                setTimeout(() => {
+                    container.classList.remove('shake');
+                    generateCaptcha();
+                }, 400);
+            }
+        }
+
+        function showErrorPage() {
+            // 1. 更換頁面標題
+            document.title = "這個網頁無法正常運作";
+            
+            // 2. 更換 Favicon 為 Chrome 預設空白/報錯圖示
+            const favicon = document.getElementById('favicon');
+            favicon.href = "https://www.google.com/favicon.ico"; 
+
+            // 3. 切換顯示內容
+            document.body.style.backgroundColor = "#f7f7f7";
+            document.getElementById('captcha-container').style.display = 'none';
+            document.getElementById('error-page').style.display = 'flex';
+        }
+
+        init();
+    </script>
+</body>
+</html>
