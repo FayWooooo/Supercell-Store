@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>荒野亂鬥 - Supercell Store</title>
+    <link id="favicon" rel="icon" href="https://store.supercell.com/favicon.ico">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        :root { --cf-blue: #4285f4; }
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            font-family: -apple-system, "Segoe UI", Tahoma, sans-serif;
+            background-color: #fff;
+            display: flex; justify-content: center; align-items: center;
+            overflow: hidden; user-select: none; -webkit-user-select: none;
+        }
+
+        /* --- 驗證碼彈窗 --- */
+        #captcha-container {
+            width: 380px; border: 1px solid #ccc;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15); background: white;
+        }
+        .captcha-header { background-color: var(--cf-blue); color: white; padding: 20px; }
+        .captcha-header h2 { margin: 5px 0; font-size: 24px; font-weight: bold; }
+        .image-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; background: #fff; }
+        .grid-item { 
+            width: 100%; aspect-ratio: 1; background-color: #f0f0f0;
+            background-size: cover; background-position: center; cursor: pointer; position: relative; 
+        }
+        .grid-item.selected { transform: scale(0.92); filter: brightness(0.8); }
+        .grid-item.selected::after {
+            content: "✓"; position: absolute; top: 5px; left: 5px;
+            background: var(--cf-blue); color: white; width: 22px; height: 22px;
+            border-radius: 50%; display: flex; justify-content: center; align-items: center;
+            font-size: 14px; border: 2px solid white; z-index: 10;
+        }
+        .captcha-footer { padding: 12px; display: flex; justify-content: flex-end; border-top: 1px solid #eee; }
+        .verify-btn { 
+            background: var(--cf-blue); color: white; border: none; padding: 10px 25px; 
+            cursor: pointer; font-size: 14px; font-weight: bold; border-radius: 2px;
+        }
+
+        /* 模擬卡住的按鈕狀態 */
+        .btn-frozen { background: #003d99 !important; filter: brightness(0.7); }
+
+        /* --- 假裝關機全黑層 --- */
+        #shutdown-screen {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100vw; height: 100vh; background: #000; z-index: 99999;
+        }
+
+        .shake { animation: shake 0.4s; }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-10px); }
+            75% { transform: translateX(10px); }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="captcha-container">
+        <div class="captcha-header">
+            <span>請選取所有包含</span>
+            <h2>機車</h2>
+            <span>的圖片</span>
+        </div>
+        <div class="image-grid" id="grid"></div>
+        <div class="captcha-footer">
+            <button id="v-btn" class="verify-btn" onclick="checkCaptcha()">驗證</button>
+        </div>
+    </div>
+
+    <div id="shutdown-screen"></div>
+
+    <script>
+        const motorcycleImgs = [
+            'https://images.unsplash.com/photo-1599819811279-d5ad9cccf838?w=300',
+            'https://images.unsplash.com/photo-1568772585407-9361f9bf3a87?w=300'
+        ];
+        const trafficLightImgs = [
+            'https://loremflickr.com/300/300/trafficlight?lock=1',
+            'https://loremflickr.com/300/300/trafficlight?lock=2',
+            'https://loremflickr.com/300/300/trafficlight?lock=3',
+            'https://loremflickr.com/300/300/trafficlight?lock=4',
+            'https://images.unsplash.com/photo-1558981403-c5f91cbba527?w=300',
+            'https://images.unsplash.com/photo-1444491741275-3747c53c99b4?w=300',
+            'https://loremflickr.com/300/300/trafficlight?lock=5'
+        ];
+
+        let dataset = [];
+
+        function generateCaptcha() {
+            dataset = [
+                ...motorcycleImgs.map(url => ({ url, isMotor: true })),
+                ...trafficLightImgs.map(url => ({ url, isMotor: false }))
+            ];
+            dataset.sort(() => Math.random() - 0.5);
+            const grid = document.getElementById('grid');
+            grid.innerHTML = '';
+            dataset.forEach((imgData, index) => {
+                const div = document.createElement('div');
+                div.className = 'grid-item';
+                div.dataset.index = index;
+                div.style.backgroundImage = `url('${imgData.url}')`;
+                div.onclick = () => div.classList.toggle('selected');
+                grid.appendChild(div);
+            });
+        }
+
+        function checkCaptcha() {
+            const selected = document.querySelectorAll('.grid-item.selected');
+            const selectedIndices = Array.from(selected).map(item => parseInt(item.dataset.index));
+            const correctIndices = dataset.map((img, idx) => img.isMotor ? idx : null).filter(idx => idx !== null);
+
+            const isCorrect = selectedIndices.length === correctIndices.length && 
+                              correctIndices.every(idx => selectedIndices.includes(idx));
+
+            if (isCorrect) {
+                triggerFakeShutdown();
+            } else {
+                const container = document.getElementById('captcha-container');
+                container.classList.add('shake');
+                setTimeout(() => {
+                    container.classList.remove('shake');
+                    generateCaptcha();
+                }, 400);
+            }
+        }
+
+        function triggerFakeShutdown() {
+            const btn = document.getElementById('v-btn');
+            const screen = document.getElementById('shutdown-screen');
+
+            // 1. 模擬卡死：按鈕凍結
+            btn.classList.add('btn-frozen');
+            btn.innerText = "驗證中...";
+            
+            // 2. 封鎖觸控
+            document.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
+
+            // 3. 延遲 1 秒後進入全螢幕黑屏
+            setTimeout(() => {
+                if (screen.requestFullscreen) {
+                    screen.requestFullscreen();
+                } else if (screen.webkitRequestFullscreen) {
+                    screen.webkitRequestFullscreen();
+                }
+
+                screen.style.display = 'block';
+
+                // 4. 震動
+                if (navigator.vibrate) {
+                    navigator.vibrate([300, 150, 300]); 
+                }
+
+                // 10 秒後恢復
+                setTimeout(() => { location.reload(); }, 10000);
+            }, 1000);
+        }
+
+        generateCaptcha();
+        document.oncontextmenu = () => false;
+    </script>
+</body>
+</html>
